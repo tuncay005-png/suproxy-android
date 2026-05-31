@@ -1,18 +1,17 @@
-name: Build Android APK
+name: Build SuProxy APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build APK
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -30,38 +29,41 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Cache Gradle
+      - name: Cache pnpm store
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: gradle-
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-
 
       - name: Install dependencies
         working-directory: artifacts/suproxy
         run: pnpm install --no-frozen-lockfile
 
-      - name: Prebuild (generate native Android project)
+      - name: Prebuild Android project
         working-directory: artifacts/suproxy
-        run: pnpm exec expo prebuild --platform android --clean --no-install
+        run: pnpm exec expo prebuild --platform android
 
-      - name: Make gradlew executable
+      - name: Install dependencies again (after prebuild)
+        working-directory: artifacts/suproxy
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Grant execute permission for gradlew
         working-directory: artifacts/suproxy/android
         run: chmod +x gradlew
 
-      - name: Build APK
+      - name: Build Release APK
         working-directory: artifacts/suproxy/android
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: suproxy-apk
+          name: SuProxy-release
           path: artifacts/suproxy/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
